@@ -1,0 +1,113 @@
+from django.db import models 
+from django.contrib.auth.models import User
+
+
+
+
+class User_role(models.Model):
+   ROLE_CHOICES=(
+      ('member','Member'),
+      ('staff','Staff')
+   )
+   role=models.CharField(max_length=20,choices=ROLE_CHOICES)
+   user=models.OneToOneField(User,on_delete=models.CASCADE,null=True,blank=True) 
+   
+
+class Centre(models.Model):
+   Centre_name=models.CharField(max_length=30)
+   Centre_address=models.CharField(max_length=40)
+   phone_no=models.IntegerField(unique=True) 
+   Manager_id = models.OneToOneField(
+        "Staff",
+        on_delete=models.SET_NULL,
+        null=True,  
+        blank=True,  
+        related_name='managed_centre'  
+    ) 
+
+   
+
+class Staff(models.Model):
+   ROLE_CHOICES = [
+        ('A', 'Administration'),
+        ('C', 'Cleaner'),
+        ('D', 'Instructor Dry'),
+        ('P', 'Instructor Pool'),
+        ('M', 'Manager'),
+        ('S', 'Sales'),
+        ('T', 'Security'),
+    ]
+   user=models.OneToOneField(User,on_delete=models.CASCADE) 
+   First_name=models.CharField(max_length=20)
+   Last_name=models.CharField(max_length=40)
+   Phone_no=models.IntegerField(unique=True)
+   joined_date=models.DateTimeField()
+   Staff_Role=models.CharField(max_length=40,choices=ROLE_CHOICES)
+   Centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE)
+
+
+class Facilities(models.Model):
+   facility_room_no=models.AutoField(primary_key=True)
+   centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE,related_name='Facilities')
+   facility_name=models.CharField(max_length=20)
+   Description=models.CharField(max_length=200)
+   Capacity=models.IntegerField()
+
+
+class Class(models.Model):
+   Class_no=models.AutoField(primary_key=True) 
+   Centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE) 
+   Facility_room_no=models.ForeignKey(Facilities,on_delete=models.CASCADE)
+   Description=models.CharField(max_length=200)
+   Start_date=models.DateField()
+   Duration=models.IntegerField()
+   Max_participant=models.IntegerField()
+   No_of_sessions=models.IntegerField()
+   Class_cost=models.FloatField()
+   instruct_by=models.ManyToManyField(Staff) 
+
+
+
+
+class Member(models.Model):
+   user=models.OneToOneField(User,on_delete=models.CASCADE) 
+   Name=models.CharField(max_length=20)
+   Member_id=models.AutoField(primary_key=True) 
+   Home_Centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE)
+   Address=models.CharField(max_length=40)
+   Joined_date=models.DateField()
+   Phone_no=models.IntegerField(unique=True) 
+   classes=models.ManyToManyField(Class,through='Enrollment')     
+
+   referred_by = models.ForeignKey(
+    "self",
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="referrals"
+)
+   
+
+class Enrollment(models.Model):
+   class_no=models.ForeignKey(Class,on_delete=models.CASCADE)
+   member_id=models.ForeignKey(Member,on_delete=models.CASCADE)
+   payment_date=models.DateField()
+
+      
+
+
+   class Meta:
+    unique_together=('class_no','member_id') 
+
+
+class Fitness_Asessment(models.Model):
+   member_id=models.ForeignKey(Member,on_delete=models.CASCADE) 
+   staff_id=models.ForeignKey(Staff,on_delete=models.CASCADE) 
+   Asessment_date=models.DateField() 
+   vo2_max=models.FloatField()
+   blood_pressure=models.FloatField()
+   Weight=models.FloatField()
+   BMI=models.FloatField()
+
+
+
