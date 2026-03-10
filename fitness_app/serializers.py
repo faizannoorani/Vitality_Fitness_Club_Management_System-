@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from .models import User ,User_role
+from .models import User ,User_role,Signup
 from rest_framework import status
 from .models import Centre, Facilities, Staff, Member, Enrollment, Class, Fitness_Asessment
 
@@ -50,12 +50,13 @@ class CentreuserSerializer(serializers.ModelSerializer):
         fields = ["Centre_name", "Centre_address",  "Centre_address", "phone_no","facilities"] 
 
 
+
 class CentreclassesSerializer(serializers.ModelSerializer): 
-         classes=Classesgetserializer(source='Class',many=True)
+         class_set=Classesgetserializer(many=True)
 
          class Meta:
            model = Centre
-           fields = ["Centre_name", "Centre_address",  "Centre_address", "phone_no","classes"] 
+           fields = ["Centre_name", "Centre_address",  "Centre_address", "phone_no","class_set"] 
 
 
 
@@ -154,3 +155,70 @@ class SignupSerializer(serializers.ModelSerializer):
          User_role.objects.create(user=user, role=role)
 
          return user
+
+
+
+class Staff_by_centre(serializers.ModelSerializer):
+    centre=CentreGetSerializer()
+    class Meta:
+        model=Staff
+        fields=["centre","Frst_name","Last_name","Phone_no","joined_date","centre"]
+
+
+class Facility_claases(serializers.ModelSerializer):
+    classes=Classesgetserializer(source='Classes',many=True)
+
+    class Meta:
+        model=Facilities
+        fields=["facility_name","Description","Capacity","classes"]
+
+
+class create_facility(serializers.ModelSerializer):
+
+
+    class Meta: 
+        model=Facilities 
+        fields='__all__'
+
+
+
+
+class Signup_serializer(serializers.ModelSerializer): 
+
+    class Meta: 
+      model=Signup 
+      fields=['username','email','password','confirm_password'] 
+      extra_kwargs={
+          'password':{'write_only':True},
+          'confirm_password':{'write_only':True} 
+        } 
+    def create(self,validated_data): 
+        
+
+        obj=Signup.objects.create(
+            username=validated_data['username'] ,
+            password=validated_data['password'],
+            email=validated_data['email'] 
+        )
+        return obj 
+    
+    def validate(self,data): 
+
+        if data['password']!=data['confirm_password']:
+            raise serializers.Validationerrors('confirm password is incorrect') 
+        return data
+
+
+
+class Loginserializer(serializers.ModelSerializer): 
+
+    class Meta: 
+        fields='__all__' 
+
+
+   
+
+
+
+
+

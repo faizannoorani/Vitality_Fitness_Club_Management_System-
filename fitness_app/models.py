@@ -1,7 +1,48 @@
 from django.db import models 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User 
+from django.contrib.auth.hashers import make_password 
+from django.contrib.auth.hashers import make_password, identify_hasher
 
 
+
+
+class Signup(models.Model): 
+   username=models.CharField(max_length=20,null=False) 
+   email=models.EmailField() 
+   password=models.CharField(max_length=500,null=False) 
+   confirm_password=models.CharField(max_length=500,null=False)  
+
+
+   class Meta:
+      db_table='Signup'
+    
+
+   def save(self,*args,**kwargs): 
+    
+     try:
+        identify_hasher(self.password) 
+     except ValueError:
+        self.password = make_password(self.password)
+
+     self.username=self.username.upper() 
+     super().save(*args,**kwargs)
+
+
+class Login(models.Model): 
+ 
+ username=models.CharField(max_length=30) 
+ password=models.CharField(max_length=40) 
+
+
+ class Meta: 
+    db_table='Login'  
+
+
+
+
+
+
+ 
 
 
 class User_role(models.Model):
@@ -24,6 +65,8 @@ class Centre(models.Model):
         blank=True,  
         related_name='managed_centre'  
     ) 
+   
+
 
    
 
@@ -46,7 +89,7 @@ class Staff(models.Model):
    Centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE)
 
 
-class Facilities(models.Model):
+class Facilities(models.Model):   
    facility_room_no=models.AutoField(primary_key=True)
    centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE,related_name='Facilities')
    facility_name=models.CharField(max_length=20)
@@ -54,10 +97,15 @@ class Facilities(models.Model):
    Capacity=models.IntegerField()
 
 
+
+
+
+
+
 class Class(models.Model):
    Class_no=models.AutoField(primary_key=True) 
    Centre_id=models.ForeignKey(Centre,on_delete=models.CASCADE) 
-   Facility_room_no=models.ForeignKey(Facilities,on_delete=models.CASCADE)
+   Facility_room_no=models.ForeignKey(Facilities,on_delete=models.CASCADE,related_name='Classes')
    Description=models.CharField(max_length=200)
    Start_date=models.DateField()
    Duration=models.IntegerField()
@@ -65,7 +113,9 @@ class Class(models.Model):
    No_of_sessions=models.IntegerField()
    Class_cost=models.FloatField()
    instruct_by=models.ManyToManyField(Staff) 
+       
 
+       
 
 
 

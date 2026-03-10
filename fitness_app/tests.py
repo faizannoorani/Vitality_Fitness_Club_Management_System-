@@ -1,6 +1,7 @@
 from django.test import TestCase
 from .models import Centre  
 from .serializers import CentreGetSerializer
+from .user_tasks import user_task 
 
 class TestCentreModel(TestCase):
 
@@ -13,5 +14,9 @@ class TestCentreModel(TestCase):
 
         ser=CentreGetSerializer(c) 
         self.assertEqual(set(ser.data.keys()), {"Centre_name", "Centre_address", "phone_no"})
+
+        
+
+
 
         

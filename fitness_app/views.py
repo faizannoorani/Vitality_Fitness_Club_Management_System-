@@ -1,95 +1,53 @@
-from django.shortcuts import render 
-from django.http import JsonResponse 
-from .models import Centre 
-from .models import Facilities 
-from .models import Staff 
-from.models import Member 
 
-from django.contrib.auth import authenticate 
+
+from Fitness_Club.settings import HMS_URL
+from .models import Staff, Facilities
+from .models import Member 
+from .models import Class ,Signup,Login
+
 from rest_framework.response import Response
-
-from.models import Enrollment 
-from.models import Class 
-from rest_framework_simplejwt.tokens import RefreshToken 
-from rest_framework.authentication import BasicAuthentication
-
-from.models import Fitness_Asessment  
-from rest_framework  import status 
-from.serializers import SignupSerializer
-
-from.serializers import CentreGetSerializer,CentrePOSTSerializer,Centre_user_serializer,CentreuserSerializer
-from .serializers import CentreclassesSerializer
-from rest_framework.decorators import api_view 
-
-
-from rest_framework.decorators import api_view
+from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import (
+    Centre_user_serializer, CentreuserSerializer, MembergetSerializer,
+    CentreclassesSerializer, CentreGetSerializer, CentrePOSTSerializer,
+    Staffserializer, Staff_by_centre, FacilitiesSerializer,
+    Facility_claases, create_facility,Classesgetserializer,Signup_serializer,Loginserializer
+)
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework import status
-from django.http import JsonResponse
+from django.core.cache import cache
 from .models import Centre
-from .serializers import CentreGetSerializer, CentrePOSTSerializer,MembergetSerializer
-
-from rest_framework.decorators import api_view
-from rest_framework import status
-from django.http import JsonResponse
-from .models import Centre
-from .serializers import CentreGetSerializer, CentrePOSTSerializer
-
-
-
-
-
-
-
-
+from rest_framework.permissions import AllowAny
+from .decorators import member_required
 import requests
-from django.conf import settings
-from django.shortcuts import redirect
-from django.contrib.auth import login
 from django.contrib.auth.models import User
-from django.http import JsonResponse 
-from django.contrib.auth import get_user_model
+from django.http import JsonResponse
 
-
-# Step 1: Redirect user to HMS authorize endpoint (for browser flow)
-
-
-
-
-
-User = get_user_model()
-HMS_URL = "http://127.0.0.1:8001"  # HMS URL
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login_with_hms_token(request):
-    """
-    Accepts HMS access token, verifies it, and logs in user in FMS.
-    """
     hms_token = request.data.get('hms_token')
     if not hms_token:
         return Response({"error": "HMS token required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Call HMS user-info endpoint
     try:
-        hms_response = requests.get(f"{HMS_URL}/api/user-info/", headers={
-            "Authorization": f"Bearer {hms_token}"
-        })
+        hms_response = requests.get(
+            f"{HMS_URL}/api/user-info/",
+            headers={"Authorization": f"Bearer {hms_token}"}
+        )
     except requests.exceptions.RequestException:
         return Response({"error": "Cannot connect to HMS"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     if hms_response.status_code != 200:
-        return Response({"error": "HMS token invalid"}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({"error": "Invalid HMS token"}, status=status.HTTP_401_UNAUTHORIZED)
 
     user_data = hms_response.json()
-    username = user_data.username
+    username = user_data.get("username")
+    if not username:
+        return Response({"error": "HMS user missing username"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Get or create local user in FMS
-    user, created = User.objects.get_or_create(username=username, defaults={
-        'email': user_data.get('email', ''),
-        'first_name': user_data.get('first_name', ''),
-        'last_name': user_data.get('last_name', ''),
-    })
-
-    # Generate FMS JWT token for the user
+    user, created = User.objects.get_or_create(username=username)
     refresh = RefreshToken.for_user(user)
 
     return Response({
@@ -97,68 +55,48 @@ def login_with_hms_token(request):
         "fms_refresh": str(refresh),
         "created": created
     })
-def hospital_login(request):
-    auth_url = f"{settings.SOCIAL_AUTH_HOSPITAL_AUTHORIZATION_URL}?response_type=code&client_id={settings.SOCIAL_AUTH_HOSPITAL_KEY}&redirect_uri=http://localhost:8002/callback/hospital/&scope={' '.join(settings.SOCIAL_AUTH_HOSPITAL_SCOPE)}"
-    return redirect(auth_url)
-
-
-# Step 2: Callback endpoint after HMS authorization
-def hospital_callback(request):
-    code = request.GET.get('code')
-    if not code:
-        return JsonResponse({"error": "No code provided"}, status=400)
-
-    # Exchange code for token
-    token_data = {
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': 'http://localhost:8002/callback/hospital/',
-        'client_id': settings.SOCIAL_AUTH_HOSPITAL_KEY,
-        'client_secret': settings.SOCIAL_AUTH_HOSPITAL_SECRET
-    }
-
-    token_response = requests.post(settings.SOCIAL_AUTH_HOSPITAL_ACCESS_TOKEN_URL, data=token_data)
-    token_json = token_response.json()
-    access_token = token_json.get('access_token')
-
-    if not access_token:
-        return JsonResponse({"error": "Failed to get access token"}, status=400)
-
-    # Optional: fetch user info from HMS
-    user_info_response = requests.get(
-        settings.SOCIAL_AUTH_HOSPITAL_USER_INFO_URL,
-        headers={'Authorization': f'Bearer {access_token}'}
-    )
-    user_info = user_info_response.json()
-    username = user_info.get('username') or user_info.get('email')
-
-    # Create or get user in FMS
-    user, created = User.objects.get_or_create(username=username)
-    login(request, user)  # Log user into FMS
-
-    return JsonResponse({
-        "message": "Login successful",
-        "username": username,
-        "access_token": access_token
-    })
 
 
 
-
-@api_view(['GET', 'POST','PUT','PATCH','DELETE'])
+@api_view(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def Allcentres(request, id=None):
+
     if request.method == 'GET':
+
         if id is not None:
             try:
-                c = Centre.objects.get(id=id)
-                ser = CentreGetSerializer(c)
-                return JsonResponse(ser.data, status=status.HTTP_200_OK, safe=False)
+                cache_key = f'centre_{id}'        
+                data = cache.get(cache_key)        
+
+                if data is None:
+                    print("MySQL se aa raha hai")
+                    c = Centre.objects.get(id=id)
+                    ser = CentreGetSerializer(c)
+                    data = ser.data               
+                    cache.set(cache_key, data, timeout=300)  
+                    return JsonResponse(ser.data,many=True,safe=False,status=status.HTTP_200_OK)
+                else:
+                    print("Redis se aa raha hai ✅")
+
+                return JsonResponse(data, status=status.HTTP_200_OK, safe=False)
+
             except Centre.DoesNotExist:
                 return JsonResponse({"error": "Centre not exists"}, status=status.HTTP_404_NOT_FOUND)
+
         else:
-            c = Centre.objects.all()
-            ser = CentreGetSerializer(c, many=True)
-            return JsonResponse(ser.data, status=status.HTTP_200_OK, safe=False)
+            cache_key = 'all_centres'
+            data = cache.get(cache_key)           
+
+            if data is None:
+                print("MySQL se aa raha hai")
+                c = Centre.objects.all()
+                ser = CentreGetSerializer(c, many=True)
+                data = ser.data                 
+                cache.set(cache_key, data, timeout=300)
+            else:
+                print("Redis se aa raha hai ")
+
+            return JsonResponse(list(data), status=status.HTTP_200_OK, safe=False)
 
     elif request.method == 'POST':
         ser = CentrePOSTSerializer(data=request.data)
@@ -166,106 +104,307 @@ def Allcentres(request, id=None):
             ser.save()
             return JsonResponse(ser.data, safe=False, status=status.HTTP_201_CREATED)
         return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
-    
 
-
-    elif request.method=='PUT':
-        c=Centre.objects.get(id=id) 
-        ser=CentrePOSTSerializer(c) 
+    elif request.method == 'PUT':
+        c = Centre.objects.get(id=id)
+        ser = CentrePOSTSerializer(c,data=request.data,partial=True)
         if ser.is_valid():
             ser.save()
-            return JsonResponse(ser.data,safe=False,status=status.HTTP_201_CREATED) 
+            return JsonResponse(ser.data, safe=False, status=status.HTTP_201_CREATED)
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        return JsonResponse(ser.errors,status=status.HTTP_400_BAD_REQUEST) 
-    
-
-    elif request.method=='PATCH':
-        c=Centre.objects.get(id=id) 
-        ser=CentrePOSTSerializer(c) 
+    elif request.method == 'PATCH':
+        c = Centre.objects.get(id=id)
+        ser = CentrePOSTSerializer(c,data=request.data,partial=True)
         if ser.is_valid():
             ser.save()
-            return JsonResponse(ser.data,safe=False,status=status.HTTP_201_CREATED) 
+            return JsonResponse(ser.data, safe=False, status=status.HTTP_201_CREATED)
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        return JsonResponse(ser.errors,status=status.HTTP_400_BAD_REQUEST) 
-    
-
-    elif request.method=='DELETE':
-
+    elif request.method == 'DELETE':
         try:
-          c=Centre.objects.get(id=id) 
-          c.delete()
-
+            c = Centre.objects.get(id=id)
+            c.delete()
         except Centre.DoesNotExist:
-            return JsonResponse({"error":"centre does not exist"},status=status.HTTP_400_BAD_REQUEST) 
-        
-@api_view(['GET']) 
-def show_members(request):  
-
-  m=Member.objects.all() 
-  ser=MembergetSerializer(m,many=True) 
-  return JsonResponse(ser.data,status=status.HTTP_202_ACCEPTED)  
-
-
-
-
-## Memebrs Apis onward 
-
-
-
-
-
-
-
-
+            return JsonResponse({"error": "centre does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
-def show_centre(request,id=None ): 
+def show_members(request):
 
-    if request.method=='GET':
-        if id is not None: 
-            c=Centre.objects.get(id=id) 
-            ser=Centre_user_serializer(c) 
-            return JsonResponse(ser.data,status=status.HTTP_200_OK) 
+    cache_key='members'
+    data=cache.get(cache_key) 
+
+    if data is None:
+      m = Member.objects.all()
+      ser = MembergetSerializer(m, many=True)
+      cache.set(cache_key, data, timeout=300)
+      return JsonResponse(ser.data,safe=False, status=status.HTTP_202_ACCEPTED) 
+    else :
+        print("redis se ara") 
+
+        return JsonResponse(data,status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
+def show_centre(request, id=None):
+    if id is not None:
+        c = Centre.objects.get(id=id)
+        ser = Centre_user_serializer(c)
+        return JsonResponse(ser.data, status=status.HTTP_200_OK)
+    else:
+
+        cache_key='centre_BY_id'
+        data=cache.get(cache_key) 
+        if data is None:   
+         print("mysql se ara")
+         c = Centre.objects.all()
+         ser = Centre_user_serializer(c, many=True)
+         data=ser.data
+         cache.set(cache_key,data,timeout=300)
+         print("mysql se ara")
+         return JsonResponse(ser.data,safe=False, status=status.HTTP_200_OK) 
+        
         else:
-          c=Centre.objects.all()
-          ser=Centre_user_serializer(ser,many=True) 
-          return JsonResponse(ser.data,status=status.HTTP_200_OK) 
+            print("redis se ara") 
+            return JsonResponse(data,safe=False,status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@member_required
+def Centre_classes(request, id=None):
+    c = Centre.objects.prefetch_related('Facilities').get(id=id)
+    ser = CentreuserSerializer(c)
+    return JsonResponse(ser.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_centre_classes(request, id=None):
+    c = Centre.objects.prefetch_related('class_set').get(id=id)
+    ser = CentreclassesSerializer(c)
+    return JsonResponse(ser.data, safe=False, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST', 'PUT', 'PATCH'])
+def staff_data(request, id=None):
+    if request.method == 'GET' and id is not None:
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s)
+        return JsonResponse(ser.data, status=status.HTTP_200_OK)
+
+    elif request.method == 'POST':
+        ser = Staffserializer(data=request.data)
+        if ser.is_valid():
+            ser.save()
+            return JsonResponse({"Created": "Staff created successfully"}, ser.data, status=status.HTTP_201_CREATED)
+        return JsonResponse(ser.errors, status=status.HTTP_308_PERMANENT_REDIRECT)
+
+    elif request.method == 'PATCH':
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s, data=request.data)
+        if ser.is_valid():
+            ser.save()
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'PUT':
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s, data=request.data)
+        if ser.is_valid():
+            ser.save()
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+def get_facilities(request, id=None):
+    if request.method == 'GET' and id is None:
+        f = Facilities.objects.all()
+        ser = FacilitiesSerializer(f, many=True)
+        return JsonResponse(ser.data, status=status.HTTP_200_OK)
+
+    elif request.method == 'GET' and id is not None:
+        f = Facilities.objects.get(id=id)
+        ser = FacilitiesSerializer(f, many=True)
+        return JsonResponse(ser.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_staff_by_centre(request, id=None):
+    s = Staff.objects.filter(Centre_id_id=id)
+    ser = Staffserializer(s, many=True)
+    return JsonResponse(ser.data, safe=False, status=status.HTTP_200_OK)
+
+
+def get_staff_by_role(request):
+    role_come= request.GET.get('role')
+    staff = Staff.objects.filter(Staff_Role=role_come)
+    
         
-
-@api_view(['GET'])
-def Centre_classes(request,id=None): 
-    if request.method =='GET':
-        c=Centre.objects.prefetch_related('Facilities').get(id=id)
-        ser=CentreuserSerializer(c) 
-        return JsonResponse(ser.data,status=status.HTTP_200_OK)  
-    
+    ser = Staffserializer(staff, many=True)
+    return JsonResponse(ser.data,safe=False, status=status.HTTP_200_OK)
 
 
-@api_view(['GET'])
-def get_centre_classes(request,id=None): 
-    c=Centre.objects.prefetch_related('class').get(id=id) 
-    ser=CentreclassesSerializer(c,many=True) 
-    return JsonResponse(ser.data,safe=False,status=status.HTTP_200_OK)   
+def staff_detail(request, id=None):
+    if request.method == 'GET' and id is None:
+        staff = Staff.objects.all()
+        ser = Staffserializer(staff, many=True) 
+        return JsonResponse(ser.data,safe=False,status=status.HTTP_200_OK)
+    elif request.method == 'GET' and id is not None:
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s)
+        return JsonResponse(ser.data, status=status.HTTP_200_OK)
+    elif request.method == 'PATCH':
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s, data=request.data)
+        if ser.is_valid():
+            ser.save()
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'PUT':
+        s = Staff.objects.get(id=id)
+        ser = Staffserializer(s, data=request.data)
+        if ser.is_valid():
+            ser.save()
+            return JsonResponse(ser.data, status=status.HTTP_202_ACCEPTED)
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'DELETE':
+        s = Staff.objects.get(id=id)
+        s.delete()
+        return JsonResponse({'Deleted': 'Staff is deleted successfully'}, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+def add_staff(request):
+    s = Staffserializer(data=request.data)
+    if s.is_valid():
+        s.save()
+        return JsonResponse(s.data, status=status.HTTP_201_CREATED)
+    return JsonResponse(s.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
-
-    
-
-
-
-
+@api_view(['GET', 'POST', 'DELETE', 'PATCH', 'PUT'])
+def get_all_facilities(request, id=None):
+    if request.method == 'GET':
+        f = Facilities.objects.all()
+        ser = FacilitiesSerializer(f, many=True)
+        return JsonResponse(ser.data, safe=False, status=status.HTTP_200_OK)
+    elif request.method == 'POST':
+        ser = FacilitiesSerializer(data=request.data)
+        if ser.is_valid():
+            ser.save()
+            return JsonResponse(ser.data, status=status.HTTP_201_CREATED)
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'DELETE':
+        try:
 
             
-       
+            f = Facilities.objects.get(pk=id)
+            f.delete()
+            return JsonResponse({"message": "Deleted"}, status=status.HTTP_204_NO_CONTENT)
+        except Facilities.DoesNotExist:
+            return JsonResponse({"error": "Facility not found"}, status=404)
+    elif request.method in ['PATCH', 'PUT']:
+        try:
+            f = Facilities.objects.get(pk=id)
+        except Facilities.DoesNotExist:
+            return JsonResponse({"error": "Facility not found"}, status=404)
+        ser = FacilitiesSerializer(f, data=request.data, partial=(request.method == 'PATCH'))
+        if ser.is_valid():
+            ser.save()
+            return JsonResponse(ser.data, status=status.HTTP_200_OK)
+        return JsonResponse(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['GET'])
+def get_classes_by_facility(request, id=None):
+    try:
+        facility = Facilities.objects.prefetch_related('Classes').get(pk=id)
+    except Facilities.DoesNotExist:
+        return JsonResponse({"error": f"Facility with id={id} not found"}, status=404)
+    ser = Facility_claases(facility)  # single object → no many=True
+    return JsonResponse(ser.data, safe=False, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def create_facility(request):
+    ser = FacilitiesSerializer(data=request.data) 
+    if ser.is_valid():
+        ser.save()
+        return JsonResponse(ser.data, safe=False, status=status.HTTP_201_CREATED)
+    return JsonResponse(ser.errors, safe=False, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+
+
+
+## Classes Api's 
+
+
+@api_view(['GET','POST','PUT','PATCH']) 
+
+def get_classes(request,id=None):
+
+    if request.method=='GET' and id is None: 
+      obj=Class.objects.all() 
+      ser=Classesgetserializer(obj,many=True) 
+      return JsonResponse(ser.data,safe=False,status=status.HTTP_200_OK) 
+    
+    elif request.method=='GET' and id is not None: 
+        obj=Class.objects.filter(Class_no=id) 
+        ser=Classesgetserializer(obj,many=True) 
+        return JsonResponse(ser.data,safe=False,status=status.HTTP_200_OK)  
     
 
     
+@api_view(['POST'])
+def create_class(request):  
+
+    ser=Classesgetserializer(data=request.data) 
+
+    if ser.is_valid(): 
+        ser.save() 
+        return JsonResponse(ser.data,status=status.HTTP_201_CREATED) 
+    return JsonResponse(ser.errors,status=status.HTTP_400_BAD_REQUEST) 
+
+
+    
+
+
+### Signup  
+@api_view(['POST'])
+def Signup(request):
+
+ ser=Signup_serializer(data=request.data)  
+
+ if ser.is_valid():
+     ser.save()
+     return JsonResponse(ser.data,status=status.HTTP_201_CREATED)  
+ 
+ return JsonResponse(ser.errors,status=status.HTTP_200_BAD_REQUEST)
+ 
+
+
+@api_view(['POST'])
+def login(request): 
+ usern=request.data.get('username') 
+ passw=request.data.get('password') 
+ ser=Loginserializer(data=request.data)  
+ if usern and passw not in Signup:
+     return JsonResponse({"user not found"}) 
+
+ if ser.is_valid(): 
+     ser.save() 
+     return JsonResponse(ser.data,{'login':'successfull'},status=status.HTTP_CREATED)
+ 
+
+
+
+
+
+
+
+
+    
+    
+
 
