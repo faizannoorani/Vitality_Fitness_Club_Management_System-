@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv 
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -93,17 +95,10 @@ WSGI_APPLICATION = 'Fitness_Club.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'Fitness_clubs',
-        'USER': 'root',
-        'PASSWORD': 'faizan123@A1',
-        'HOST': 'localhost',
-        'PORT': '3306',
-    }
-}
 
+DATABASES = {
+    "default": dj_database_url.parse(os.getenv("DATABASE_URL"))
+}
 INSTALLED_APPS += ['social_django']
 
 AUTHENTICATION_BACKENDS = (
