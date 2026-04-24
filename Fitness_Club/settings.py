@@ -26,13 +26,13 @@ SECRET_KEY = 'django-insecure-e1@xn_&0c8-g5+clbo6u&txgk%687lfq7$t&pbl886h!(kkgnf
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'drf_yasg',
     'django.contrib.admin',
     'fitness_app',
     'django.contrib.auth',
@@ -43,6 +43,11 @@ INSTALLED_APPS = [
     "corsheaders",
     'django_celery_beat',     
     'django_celery_results',
+    'rest_framework',
+    'rest_framework_simplejwt',
+
+    
+
 ]
 
 
@@ -58,6 +63,11 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'social_django.middleware.SocialAuthExceptionMiddleware',
+]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React CRA ka port
+    "http://localhost:5173",
 ]
 
 ROOT_URLCONF = 'Fitness_Club.urls'
@@ -211,4 +221,48 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Karachi'
 
 # ─── Beat Scheduler ────────────────────────────────
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler' 
+
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny'
+    ]
+}
+
+
+from datetime import timedelta 
+
+
+SIMPLE_JWT={
+    "ACCESS_TOKEN_LIFETIME":timedelta(minutes=10) ,
+    "REFRESH_TOKEN_LIFETIME":timedelta(days=2) ,
+
+}
+
+
+
+
+
+
+
+
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER') 
+
+
+
+
+
+
+
+
+# settings.py
+SENDGRID_API_KEY = "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"  # jo tumne create kiya
+EMAIL_FROM = "faizannoorani19@gmail.com"         # verified sender email  
+

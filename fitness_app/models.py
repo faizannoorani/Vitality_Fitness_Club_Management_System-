@@ -11,6 +11,7 @@ class Signup(models.Model):
    email=models.EmailField() 
    password=models.CharField(max_length=500,null=False) 
    confirm_password=models.CharField(max_length=500,null=False)  
+   is_verified = models.BooleanField(default=False, null=True)
 
 
    class Meta:
@@ -26,6 +27,25 @@ class Signup(models.Model):
 
      self.username=self.username.upper() 
      super().save(*args,**kwargs)
+
+
+
+class OTP(models.Model):
+    user = models.ForeignKey(Signup, on_delete=models.CASCADE, related_name="otps")
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)  # OTP use hone ke baad True
+
+    def __str__(self):
+        return f"{self.user.email} - {self.otp}"
+
+    def is_expired(self):
+        """
+        OTP expiry check (5 minutes validity)
+        """
+        expiry_time = self.created_at + timedelta(minutes=5)
+        return timezone.now() > expiry_time
+
 
 
 class Login(models.Model): 
@@ -79,7 +99,9 @@ class Staff(models.Model):
         ('M', 'Manager'),
         ('S', 'Sales'),
         ('T', 'Security'),
-    ]
+    ] 
+
+
    user=models.OneToOneField(User,on_delete=models.CASCADE) 
    First_name=models.CharField(max_length=20)
    Last_name=models.CharField(max_length=40)
@@ -113,7 +135,9 @@ class Class(models.Model):
    No_of_sessions=models.IntegerField()
    Class_cost=models.FloatField()
    instruct_by=models.ManyToManyField(Staff) 
-       
+   
+
+   
 
        
 

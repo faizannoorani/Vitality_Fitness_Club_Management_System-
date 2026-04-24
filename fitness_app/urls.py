@@ -28,8 +28,10 @@ path('create/facility',views.create_facility),
 path('classes/<int:id>/',views.get_classes),
 path('classes/',views.get_classes),
 path('create/class',views.create_class),
-path('signup/',views.Signup),
-path('login/',views.login)
+
+path('login/',views.login),
+path('signup/',views.Signup_fun),
+path('verify-otp/<int:id>/',views.verifyOTP) 
 
 
 

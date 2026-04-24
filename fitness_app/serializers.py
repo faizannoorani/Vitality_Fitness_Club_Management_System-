@@ -2,7 +2,9 @@
 from rest_framework import serializers
 from .models import User ,User_role,Signup
 from rest_framework import status
-from .models import Centre, Facilities, Staff, Member, Enrollment, Class, Fitness_Asessment
+from .models import Centre, Facilities, Staff, Member, Enrollment, Class, Fitness_Asessment,Login  
+
+from django.contrib.auth.hashers import check_password
 
 
 class FacilitiesSerializer(serializers.ModelSerializer):
@@ -198,7 +200,8 @@ class Signup_serializer(serializers.ModelSerializer):
         obj=Signup.objects.create(
             username=validated_data['username'] ,
             password=validated_data['password'],
-            email=validated_data['email'] 
+            email=validated_data['email'] ,
+            is_verified=False
         )
         return obj 
     
@@ -206,17 +209,42 @@ class Signup_serializer(serializers.ModelSerializer):
 
         if data['password']!=data['confirm_password']:
             raise serializers.Validationerrors('confirm password is incorrect') 
+        
+        if data['email'] in Signup.objects.values_list('email',flat=True): 
+           raise serializers.ValidationError('Email already exists')
         return data
+
 
 
 
 class Loginserializer(serializers.ModelSerializer): 
 
     class Meta: 
+        model=Login 
         fields='__all__' 
 
 
-   
+
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+
+        # Check in Login model if user already logged in
+        if Login.objects.filter(username=username).exists():
+            raise serializers.ValidationError('User already logged in')
+
+        # Check in Signup model if user exists
+        try:
+            user = Signup.objects.get(username=username)
+        except Signup.DoesNotExist:
+            raise serializers.ValidationError('User not found, please signup first')
+
+        # Check hashed password
+        if not check_password(password, user.password):
+            raise serializers.ValidationError('Invalid password')
+
+        data['user'] = user
+        return data
 
 
 

@@ -1,10 +1,11 @@
 
 
 from Fitness_Club.settings import HMS_URL
-from .models import Staff, Facilities
+from rest_framework.permissions import IsAuthenticated
+from .models import Staff, Facilities,OTP
 from .models import Member 
 from .models import Class ,Signup,Login
-
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import (
@@ -21,8 +22,76 @@ from rest_framework.permissions import AllowAny
 from .decorators import member_required
 import requests
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import JsonResponse 
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import Signup, Login  # ← both models 
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework_simplejwt.authentication import JWTAuthentication 
+import random   
+from .utils import generate_otp
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from django.conf import settings 
+from .tasks import send_welcome_email
 
+def send_otp_email(email, otp):
+    message = Mail(
+        from_email=settings.EMAIL_FROM,
+        to_emails=email,
+        subject="Your OTP Code",
+        html_content=f"<strong>Your OTP is: {otp}</strong>"
+    )
+    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+    sg.send(message) 
+
+@api_view(['POST'])
+def verifyOTP(request, id):
+    otp = request.data.get('otp')
+    
+    # ✅ Yeh line add karo
+    try:
+        otp = int(otp)
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid OTP format"}, status=400)
+    
+    users_id = id
+    if OTP.objects.filter(otp=otp, is_used=False, user_id=users_id).exists():
+        otp_obj = OTP.objects.get(otp=otp, is_used=False)
+        otp_obj.is_used = True
+        otp_obj.save()
+        related_obj = Signup.objects.get(id=users_id)
+        related_obj.is_verified = True
+        related_obj.save()
+        return JsonResponse({"message": "OTP verified successfully"}, status=status.HTTP_200_OK)
+    else:
+        return JsonResponse({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+ 
+@api_view(['POST'])
+def Signup_fun(request):
+    ser = Signup_serializer(data=request.data)
+    email = request.data.get('email') 
+
+
+    print("REQUEST DATA:", request.data)
+
+
+    if ser.is_valid():
+        ser.save()
+
+        otp = generate_otp() 
+        print(f"Generated OTP: {otp}") 
+
+        OTP.objects.create(user=ser.instance, otp=otp)
+        fetched_id = ser.instance.id
+        send_otp_email(email, otp)
+        send_welcome_email.delay(email)      
+        return JsonResponse({"message": "Signup successful. Please verify your email.", "user_id": fetched_id}, status=status.HTTP_201_CREATED)
+
+    return JsonResponse({"errors": ser.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -58,7 +127,40 @@ def login_with_hms_token(request):
 
 
 
+@authentication_classes([JWTAuthentication])
+@api_view(['POST'])
+def login(request):
+    username = request.data.get('username')
+    serializer = Loginserializer(data=request.data)
+
+    signup_obj=Signup.objects.filter(username=username).first() 
+    if signup_obj.is_verified==False:
+        return JsonResponse({"error":"Please verify your email first"},status=status.HTTP_401_UNAUTHORIZED) 
+
+
+    else:
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
+            }, status=status.HTTP_200_OK)
+
+
+        return Response(
+         serializer.errors,
+         status=status.HTTP_400_BAD_REQUEST
+    )
+
+
+
+
 @api_view(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+@permission_classes([JWTAuthentication])
+
+
 def Allcentres(request, id=None):
 
     if request.method == 'GET':
@@ -368,36 +470,6 @@ def create_class(request):
 
 
     
-
-
-### Signup  
-@api_view(['POST'])
-def Signup(request):
-
- ser=Signup_serializer(data=request.data)  
-
- if ser.is_valid():
-     ser.save()
-     return JsonResponse(ser.data,status=status.HTTP_201_CREATED)  
- 
- return JsonResponse(ser.errors,status=status.HTTP_200_BAD_REQUEST)
- 
-
-
-@api_view(['POST'])
-def login(request): 
- usern=request.data.get('username') 
- passw=request.data.get('password') 
- ser=Loginserializer(data=request.data)  
- if usern and passw not in Signup:
-     return JsonResponse({"user not found"}) 
-
- if ser.is_valid(): 
-     ser.save() 
-     return JsonResponse(ser.data,{'login':'successfull'},status=status.HTTP_CREATED)
- 
-
-
 
 
 
