@@ -29,12 +29,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.10
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -51,18 +51,11 @@ jobs:
           python manage.py makemigrations
           python manage.py migrate
 
-      - name: Start Celery Worker
-        env:
-          CELERY_BROKER_URL: redis://localhost:6379/0
-        run: |
-          celery -A Fitness_Club worker --loglevel=info &
-
       - name: Run tests
         env:
           DB_NAME: test_db
           DB_USER: root
           DB_PASSWORD: root
           DB_HOST: 127.0.0.1
-          CELERY_BROKER_URL: redis://localhost:6379/0
         run: |
           python manage.py test
