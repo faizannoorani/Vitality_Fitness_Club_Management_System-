@@ -1,23 +1,48 @@
 
 
+<<<<<<< HEAD
 name: Django CI
+=======
+
+
+name: Django DRF CI (MySQL + Redis + Celery)
+>>>>>>> a6d897a (make changes)
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [ "main" ]
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
-    
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Python setup
-        uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
+<<<<<<< HEAD
           python-version: '3.11'
       
       - name: Dependencies install
@@ -25,3 +50,46 @@ jobs:
       
       - name: Tests chalao
         run: python manage.py test
+=======
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Wait for MySQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          until mysqladmin ping -h "127.0.0.1" --silent; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
+      - name: Run migrations
+        env:
+          DB_NAME: test_db
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_HOST: 127.0.0.1
+        run: python manage.py migrate
+
+      - name: Start Celery worker (test mode)
+        env:
+          CELERY_BROKER_URL: redis://localhost:6379/0
+        run: |
+          celery -A your_project worker --loglevel=info &
+          echo "Celery started"
+
+      - name: Run tests
+        env:
+          DB_NAME: test_db
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_HOST: 127.0.0.1
+          CELERY_BROKER_URL: redis://localhost:6379/0
+        run: python manage.py test
+
+        
+>>>>>>> a6d897a (make changes)
