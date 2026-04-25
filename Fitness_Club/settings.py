@@ -96,9 +96,39 @@ WSGI_APPLICATION = 'Fitness_Club.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 
+
+
+
+# settings.py
+
 DATABASES = {
-    "default": dj_database_url.parse(os.getenv("DATABASE_URL"))
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'Fitness_clubs',
+        'USER': 'root',
+        'PASSWORD': 'faizan123@A1',
+        'HOST': 'localhost',  # Or the IP address of your MySQL server
+        'PORT': '3306',       # Default MySQL port
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+        },
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 INSTALLED_APPS += ['social_django']
 
 AUTHENTICATION_BACKENDS = (
