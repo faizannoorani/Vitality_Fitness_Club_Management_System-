@@ -1,3 +1,5 @@
+
+
 name: Django CI Pipeline
 
 on:
@@ -20,7 +22,7 @@ jobs:
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
 
       redis:
         image: redis:7
@@ -41,15 +43,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 🔥 IMPORTANT: MySQL ready wait
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && echo "MySQL Ready" && break
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
       - name: Run migrations
         env:
           DB_NAME: test_db
           DB_USER: root
           DB_PASSWORD: root
           DB_HOST: 127.0.0.1
+          DB_PORT: 3306
         run: |
           python manage.py makemigrations
           python manage.py migrate
+
+      - name: Start Celery Worker (background)
+        env:
+          CELERY_BROKER_URL: redis://localhost:6379/0
+        run: |
+          celery -A your_project worker --loglevel=info &
 
       - name: Run tests
         env:
@@ -57,5 +75,7 @@ jobs:
           DB_USER: root
           DB_PASSWORD: root
           DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          CELERY_BROKER_URL: redis://localhost:6379/0
         run: |
           python manage.py test
